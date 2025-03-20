@@ -1,0 +1,116 @@
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <NimBLEDevice.h>
+#include <TFT_eSPI.h>
+#include <SPI.h>
+#include <SD.h>
+
+// ========== CONFIGURATION ==========
+#define SCREEN_WIDTH  240
+#define SCREEN_HEIGHT 320
+#define SD_CS_PIN     5  // Adjust based on board
+
+// Global Variables
+TFT_eSPI tft = TFT_eSPI();
+bool sdAvailable = false;
+
+// WiFi Sniffing
+static wifi_promiscuous_pkt_type_t filter_pkt_type = WIFI_PKT_MGMT; // Only sniff management packets
+static uint32_t deauth_count = 0;
+
+// BLE Device Scanning
+NimBLEScan *pBLEScan;
+
+// ========== WIFI SNIFFER CALLBACK ==========
+void wifi_sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
+    if (type != WIFI_PKT_MGMT) return;
+
+    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *) buf;
+    uint8_t *payload = pkt->payload;
+    
+    uint16_t frame_control = (payload[0] << 8) | payload[1];
+    uint8_t frame_type = (frame_control & 0x0C) >> 2;
+    uint8_t frame_subtype = (frame_control & 0xF0) >> 4;
+
+    // Deauthentication Attack Detection (Subtype 12)
+    if (frame_type == 0 && frame_subtype == 12) {
+        deauth_count++;
+        display_alert("Deauth Attack Detected!", pkt->rx_ctrl.rssi);
+        log_event("Deauth Attack", pkt->rx_ctrl.rssi);
+    }
+}
+
+// ========== BLUETOOTH SCANNER ==========
+class BLEScanCallbacks : public NimBLEScanCallbacks {
+    void onResult(NimBLEAdvertisedDevice *advertisedDevice) {
+        std::string deviceName = advertisedDevice->getName();
+        
+        // Detect Flipper Zero or Skimmers
+        if (deviceName.find("Flipper") != std::string::npos || deviceName.find("HC-05") != std::string::npos) {
+            display_alert("Suspicious BLE Device!", advertisedDevice->getRSSI());
+            log_event("BLE Threat Detected", advertisedDevice->getRSSI());
+        }
+    }
+};
+
+// ========== INITIALIZATION ==========
+void setup() {
+    Serial.begin(115200);
+
+    // Display Init
+    tft.init();
+    tft.setRotation(1);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(2);
+    tft.drawString("Spot ESP - Defense Mode", 10, 10);
+
+    // Wi-Fi Init
+    WiFi.mode(WIFI_STA);
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_callback);
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE); // Start on channel 1
+    
+    // BLE Init
+    NimBLEDevice::init("");
+    pBLEScan = NimBLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new BLEScanCallbacks());
+    pBLEScan->setActiveScan(true);
+    pBLEScan->start(5, true);
+
+    // SD Card Init
+    if (SD.begin(SD_CS_PIN)) {
+        sdAvailable = true;
+        log_event("SD Card Initialized", 0);
+    }
+}
+
+// ========== UI ALERT FUNCTION ==========
+void display_alert(const char *message, int signal) {
+    tft.fillRect(10, 50, 220, 40, TFT_RED);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(message, 20, 60);
+    Serial.printf("ALERT: %s (Signal: %d dBm)\n", message, signal);
+}
+
+// ========== EVENT LOGGING ==========
+void log_event(const char *event, int signal) {
+    if (!sdAvailable) return;
+    
+    File logFile = SD.open("/spotesp.log", FILE_APPEND);
+    if (logFile) {
+        logFile.printf("%lu: %s - Signal: %d dBm\n", millis(), event, signal);
+        logFile.close();
+    }
+}
+
+// ========== MAIN LOOP ==========
+void loop() {
+    static uint8_t channel = 1;
+
+    // Channel Hopping
+    channel = (channel % 11) + 1; // Cycle through channels 1-11
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    
+    delay(500);
+}
