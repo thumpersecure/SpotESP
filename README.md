@@ -1,6 +1,38 @@
 # SpotESP
 Spot ESP will leverage the ESP32-CYD hardware to provide a comprehensive defensive monitoring tool. Spot ESP aims to be a fresh, optimized solution tailored for the Cheap Yellow Display platform, turning it into a portable wireless threat detector.
 
+🔥 Explanation of Features
+	1.	Wi-Fi Deauth Detection
+	•	Uses ESP32’s promiscuous mode to capture all packets.
+	•	Filters management packets and checks for deauth attack frames (Subtype 12).
+	•	When detected, updates the UI and logs the event to SD.
+	2.	Bluetooth Scanner for Flipper Zero / Skimmers
+	•	Uses NimBLE for lightweight BLE scanning.
+	•	Detects known BLE skimmers (e.g., HC-05) and Flipper Zero devices.
+	•	Alerts user with UI messages and logs threats.
+	3.	Touchscreen UI Alerts
+	•	Displays “Deauth Attack Detected” messages when attacks are seen.
+	•	Changes screen background to red for immediate visibility.
+	4.	SD Card Logging
+	•	Logs attack events to an SD card (spotesp.log).
+	•	Stores timestamps and signal strength.
+	5.	Channel Hopping
+	•	Cycles through Wi-Fi channels 1-11 every 500ms.
+	•	Ensures detection across all networks.
+
+⸻
+
+🚀 Next Steps
+	•	Improve UI Menus (Add logs viewer and settings)
+	•	Enhance BLE detection (Whitelist common devices to reduce false alerts)
+	•	Optimize Performance (Adjust Wi-Fi/BLE scan balance)
+	•	Include More Threats (Pineapple detection, rogue APs)
+	•	User Configuration Options (Enable/Disable detection types)
+
+This is the first version of the Spot ESP firmware
+
+
+
 
 Spot ESP Development Plan
 
