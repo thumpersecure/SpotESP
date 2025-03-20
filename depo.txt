@@ -1,0 +1,116 @@
+Feature
+PlatformIO (Arduino)
+ESP-IDF
+Framework
+Arduino-ESP32
+Espressif ESP-IDF
+Wi-Fi Sniffing
+esp_wifi_set_promiscuous()
+Same, but using FreeRTOS tasks
+Bluetooth
+NimBLE-Arduino
+Requires custom NimBLE implementation
+UI Library
+TFT_eSPI
+TFT drivers directly via SPI
+Event Logging
+SD card via Arduino SD
+Direct fopen() to SD path
+Task Scheduling
+loop() function
+FreeRTOS xTaskCreate()
+
+#include <stdio.h>
+#include "esp_wifi.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/spi_master.h"
+#include "esp_system.h"
+#include "tftspi.h"
+#include "tft.h"
+#include "sdmmc_cmd.h"
+
+// ===== CONFIGURATION =====
+#define SD_MOUNT_POINT "/sdcard"
+static const char *TAG = "SpotESP";
+
+// Global variables
+static uint32_t deauth_count = 0;
+
+// Wi-Fi Packet Sniffing Callback
+static void wifi_sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
+    if (type != WIFI_PKT_MGMT) return;
+
+    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *) buf;
+    uint8_t *payload = pkt->payload;
+    uint16_t frame_control = (payload[0] << 8) | payload[1];
+    uint8_t frame_type = (frame_control & 0x0C) >> 2;
+    uint8_t frame_subtype = (frame_control & 0xF0) >> 4;
+
+    if (frame_type == 0 && frame_subtype == 12) {
+        deauth_count++;
+        ESP_LOGW(TAG, "Deauth Attack Detected! Total: %d", deauth_count);
+    }
+}
+
+// Wi-Fi Setup
+void wifi_sniffing_task(void *pvParameter) {
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_start();
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_callback);
+
+    uint8_t channel = 1;
+    while (1) {
+        channel = (channel % 11) + 1;
+        esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// UI Task (TFT Display)
+void ui_task(void *pvParameter) {
+    tft_disp_type = TFT_TYPE_ILI9341;
+    TFT_PinsInit();
+    TFT_SPIInit();
+    TFT_setRotation(PORTRAIT);
+    TFT_fillScreen(TFT_BLACK);
+    TFT_setFont(DEFAULT_FONT, NULL);
+    TFT_print("Spot ESP - Defense Mode", CENTER, 10);
+
+    while (1) {
+        char buffer[32];
+        sprintf(buffer, "Deauth: %d", deauth_count);
+        TFT_fillRect(10, 50, 220, 40, TFT_BLACK);
+        TFT_print(buffer, 20, 60);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// SD Logging
+void log_event(const char *event) {
+    FILE *f = fopen(SD_MOUNT_POINT "/spotesp.log", "a");
+    if (f) {
+        fprintf(f, "%s\n", event);
+        fclose(f);
+    }
+}
+
+// ===== MAIN FUNCTION =====
+extern "C" void app_main() {
+    ESP_ERROR_CHECK(nvs_flash_init());
+
+    xTaskCreate(&wifi_sniffing_task, "WiFi Sniffer", 4096, NULL, 5, NULL);
+    xTaskCreate(&ui_task, "UI Task", 4096, NULL, 5, NULL);
+}
+
+idf_component_register(SRCS "main.cpp"
+                    INCLUDE_DIRS ".")
+
+cd SpotESP
+idf.py set-target esp32
+idf.py build flash monitor
