@@ -31,8 +31,15 @@ Spot ESP will leverage the ESP32-CYD hardware to provide a comprehensive defensi
 
 This is the first version of the Spot ESP firmware
 
-
-
+MORE TO ADD such as bruce, ghostesp, marauder, and more...
+Espressif ESP32 Wi-Fi API – promiscuous mode usage ￼ ￼ (for capturing raw 802.11 frames).
+	•	Spacehuhn “DeauthDetector” project – reference for detecting Wi-Fi deauth/disassoc frames ￼.
+	•	Null Byte article on Wi-Fi jamming – described using ESP8266 to detect deauth attacks ￼.
+	•	BleepingComputer – report on Flipper Zero BLE spam and detection (“Wall of Flippers”) ￼.
+	•	Mobile Hacker Blog – notes on ARP spoofing detection via monitoring gateway MAC ￼.
+	•	NordVPN blog – tips for spotting Evil Twin rogue access points (duplicate SSIDs, mismatched MAC) ￼.
+	•	ArduinoOTA documentation – enabling Wi-Fi based OTA firmware updates on ESP32 ￼.
+THANK YOU 
 
 Spot ESP Development Plan
 
