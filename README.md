@@ -41,7 +41,46 @@ Espressif ESP32 Wi-Fi API – promiscuous mode usage ￼ ￼ (for capturing raw 
 	•	ArduinoOTA documentation – enabling Wi-Fi based OTA firmware updates on ESP32 ￼.
 THANK YOU 
 
-Spot ESP Development Plan
+This firmware uses promiscuous mode for Wi-Fi sniffing and the official ESP-IDF Bluetooth API for scanning. The Wi-Fi sniffer callback inspects management frame subtypes to count deauthentication (0xC0) and disassociation (0xA0) frames ￼, and probe request frames. When thresholds are exceeded, an event is logged. Similarly, Bluetooth scanning callbacks detect devices named “Flipper” or “HC-05/06” and log those. ARP spoofing detection is rudimentary: if the ESP32 is connected to a network and sees an ARP reply from the gateway IP with a different MAC, it logs an alert ￼. The UI is simplified due to space, but provides a menu and basic screens for demonstration. In practice, further code refinement (e.g., better touch coordinate calibration, dynamic log scrolling, wifi credential input for OTA, etc.) would be needed for a polished product.)
+
+Setup and Installation Guide
+
+1. Install ESP32 Support and Libraries: Ensure you have the ESP32 board package installed in your Arduino IDE or PlatformIO. Then install the required libraries: TFT_eSPI (by Bodmer) and XPT2046_Touchscreen (by Paul Stoffregen) for the display and touch ￼. Configure TFT_eSPI’s User_Setup.h for the ESP32-2432S028 (CYD) board – use the pin definitions provided above or the pre-made setup from the Random Nerd Tutorials guide ￼. Also include the ArduinoOTA library (built into ESP32 package) and the Arduino SD library.
+
+2. Wiring and Setup: The ESP32-2432S028 board has the screen, touch, and SD card pre-wired. Simply insert a formatted microSD card (FAT32) into the slot. Power the board via USB (ensure it can supply enough current for Wi-Fi and display backlight). If using a different ESP32 + TFT setup, wire the TFT, touch, and SD according to the pin definitions in the code, and adjust User_Setup.h accordingly. No external buttons are needed – all input is via the touchscreen.
+
+3. Compilation: Open the main.cpp in your IDE (you can rename it to main.ino if using Arduino IDE, or use PlatformIO with an appropriate platformio.ini). Select the ESP32 Dev Module (or the specific board if listed) and compile the sketch. If all libraries are in place, it should compile without errors. The code is large and uses dual-core tasks, which the ESP32 can handle with its FreeRTOS scheduler.
+
+4. Flashing the Firmware: Connect the ESP32 board to your PC via USB. Select the correct COM port and upload the firmware. On first boot, you should see the device initializing (open Serial Monitor at 115200 baud to view debug logs). The screen will show the Main Menu with options for “Live Threat Monitor”, “View Logs”, and “Settings”.
+
+5. Using the Device: Navigate the UI by tapping the menu items:
+	•	Live Threat Monitor: Shows a real-time view of detected threats. When an attack is detected (e.g., a deauth flood or BLE spam), an entry is logged and would be indicated here (in this basic version, it just shows a placeholder message and relies on logs for details).
+	•	View Logs: Displays recent log entries from the SD card. Each log line is timestamped (the device will use system time if available, or uptime if not). You can scroll through logs by editing the code to add scroll support or by removing the SD card to read the log files on a computer for full details.
+	•	Settings: In the current code, this screen shows status info (Wi-Fi connection, protected SSID, SD status). Here you would configure Wi-Fi credentials for OTA updates or set a specific SSID to guard (for rogue AP detection). In a refined version, you could add touch buttons to enter config menus. For now, any tap on Settings returns to the main menu.
+
+6. Log Files: The firmware creates/appends to a log file on the SD card (named with a unique identifier or date). Logs are in plain text, for example:
+
+[12:00:05] [Wi-Fi] Possible Deauth attack! (32 deauth/disassoc frames)
+[12:05:17] [Bluetooth] Flipper Zero device detected (Flipper_ABCDEF @ XX:XX:XX:XX:XX:XX)
+[12:10:42] [LAN] Possible ARP spoof: Gateway 192.168.1.1 MAC changed!
+
+Each entry has a timestamp, category, and description. Logs are organized by date if configured (you can modify the code to use actual date in filenames after adding an RTC or NTP sync). To retrieve logs, power off the device and remove the SD card, then read the files on a PC. Alternatively, you could extend the firmware to offer a USB serial command to dump the log or a simple web server to download logs.
+
+7. OTA Firmware Updates: To use OTA, you need to connect the Spot ESP to a Wi-Fi network. Currently, the code does not automatically connect to Wi-Fi (to avoid interfering with scanning). You have two options:
+	•	Compile-time Wi-Fi Credentials: Manually set protectedSSID to your Wi-Fi SSID and use WiFi.begin("SSID","PASSWORD") in setup() (for example, under the Settings section) to join your network. Once connected (check WiFi.isConnected()), call ArduinoOTA.begin(). The Settings screen will then show “Wi-Fi OTA: Ready”. Now you can upload new firmware over the air (the device will advertise itself as “Spot-ESP32” on the network for OTA). Use the Arduino IDE “Upload OTA” function to push updates wirelessly ￼.
+	•	Run-time via Settings: Implement a simple Wi-Fi config in the Settings menu – e.g., cycle through predefined networks or use touch to input credentials (this is an advanced feature, not implemented in the above code). After connecting, the device will enable OTA similarly.
+
+Once OTA is enabled, future firmware can be uploaded without physical access. The device will log the start and completion of OTA updates for transparency. (Note: While OTA is active, Wi-Fi scanning might be paused to maintain the connection reliably.)
+
+8. Final Deployment: After configuring and testing, you can enclose the Spot ESP device in a case (ensuring the touchscreen is accessible). Power it via a USB power supply or battery. The device will start monitoring immediately on power-up – scanning Wi-Fi channels for attacks, listening for Bluetooth spam, and watching the LAN if connected. It runs autonomously, logging events to the SD card. You can periodically check the logs or observe the on-screen alerts to know if any suspicious activity was detected in your vicinity.
+
+The entire project can be packaged as a ZIP file containing main.cpp and any necessary configuration files (like the TFT_eSPI User_Setup.h for the CYD board). This makes it easy to share or deploy – simply extract the ZIP, open the project in your IDE, adjust any configs (Wi-Fi credentials, etc.), and flash it to an ESP32-2432S028 board. With Spot ESP up and running, you have a portable intrusion detection system for wireless threats, all on a compact touchscreen ESP32 device. Enjoy secure and informed networking with your new Spot ESP firmware!
+
+
+
+
+
+Spot ESP Plan
 
 Project Overview:
 Spot ESP is a defensive firmware for the ESP32-2432S028 “Cheap Yellow Display” (CYD) board, focused solely on detecting wireless attacks and anomalies (with no offensive/jamming capabilities). It continuously monitors Wi-Fi and Bluetooth signals to alert the user of potential threats like deauthentication floods, rogue access points, malicious Bluetooth devices (e.g. skimmers), and suspicious gadgets (Wi-Fi Pineapples, Flipper Zero, etc.). This guide outlines a structured plan to implement Spot ESP, covering everything from required tools to detection algorithms, UI design, logging, performance, and challenges.
